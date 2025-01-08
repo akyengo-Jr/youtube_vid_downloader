@@ -7,7 +7,7 @@ def download_video(url, quality='highest'):
         if not "youtube.com" in url and not "youtu.be" in url:
             raise ValueError("Invalid YouTube URL")
         
-        yt = YouTube(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"})
+        yt = YouTube(url)
         
         # Select stream based on quality
         if quality == 'highest':
