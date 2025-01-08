@@ -3,14 +3,29 @@ from pytube import YouTube
 import re
 import os
 
+def bypass_age_gate(url):
+    """Bypass age gate by adding headers"""
+    from pytube.innertube import InnerTube
+    innertube = InnerTube(client='ANDROID')
+    headers = {
+        'User-Agent': 'Mozilla/5.0',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-us,en;q=0.5',
+        'Accept-Encoding': 'gzip,deflate',
+        'Accept-Charset': 'ISO-8859-1,utf-8;q=0.7,*;q=0.7',
+        'Keep-Alive': 'timeout=15, max=100',
+        'Connection': 'keep-alive',
+    }
+    return YouTube(url, use_oauth=True, allow_oauth_cache=True, headers=headers)
+
 def get_video_info(url):
     try:
-        yt = YouTube(url)
-        streams = yt.streams.filter(progressive=True)
+        yt = bypass_age_gate(url)
+        streams = yt.streams.filter(progressive=True).order_by('resolution').desc()
         available_qualities = [stream.resolution for stream in streams]
         return yt, available_qualities
     except Exception as e:
-        return None, None
+        return None, str(e)
 
 def download_video(url, selected_quality, output_path=None):
     try:
@@ -18,7 +33,7 @@ def download_video(url, selected_quality, output_path=None):
         if not re.match(r'^(https?\:\/\/)?(www\.youtube\.com|youtu\.?be)\/.+$', url):
             raise ValueError("Invalid YouTube URL")
         
-        yt = YouTube(url)
+        yt = bypass_age_gate(url)
         
         # Add progress callback
         def on_progress(stream, chunk, bytes_remaining):
@@ -37,6 +52,9 @@ def download_video(url, selected_quality, output_path=None):
             stream = yt.streams.filter(resolution=selected_quality, progressive=True).first()
             if not stream:
                 stream = yt.streams.get_highest_resolution()
+        
+        if not stream:
+            raise ValueError("No suitable stream found for this video")
         
         # Create output directory if it doesn't exist
         if output_path:
@@ -63,27 +81,30 @@ if url:
     # Get video information
     yt, available_qualities = get_video_info(url)
     
-    if yt and available_qualities:
-        st.image(yt.thumbnail_url, use_column_width=True)
-        st.write(f"Title: {yt.title}")
-        st.write(f"Length: {yt.length // 60}:{yt.length % 60:02d} minutes")
-        st.write(f"Views: {yt.views:,}")
-        
-        # Quality selection
-        qualities = ['highest'] + available_qualities
-        selected_quality = st.selectbox('Select video quality', qualities)
-        
-        if st.button('Download Video'):
-            progress_bar = st.progress(0)
-            status_text = st.empty()
+    if yt and isinstance(available_qualities, list):
+        try:
+            st.image(yt.thumbnail_url, use_column_width=True)
+            st.write(f"Title: {yt.title}")
+            st.write(f"Length: {yt.length // 60}:{yt.length % 60:02d} minutes")
+            st.write(f"Views: {yt.views:,}")
             
-            success, result = download_video(url, selected_quality, download_dir)
+            # Quality selection
+            qualities = ['highest'] + available_qualities
+            selected_quality = st.selectbox('Select video quality', qualities)
             
-            if success:
-                progress_bar.progress(100)
-                status_text.text("Download completed!")
-                st.success(f'Video "{result}" has been downloaded to the "downloads" folder!')
-            else:
-                st.error(f'Error: {result}')
+            if st.button('Download Video'):
+                progress_bar = st.progress(0)
+                status_text = st.empty()
+                
+                success, result = download_video(url, selected_quality, download_dir)
+                
+                if success:
+                    progress_bar.progress(100)
+                    status_text.text("Download completed!")
+                    st.success(f'Video "{result}" has been downloaded to the "downloads" folder!')
+                else:
+                    st.error(f'Error: {result}')
+        except Exception as e:
+            st.error(f"Error processing video: {str(e)}")
     else:
-        st.error("Unable to fetch video information. Please check the URL and try again.")
+        st.error(f"Unable to fetch video information: {available_qualities}")
