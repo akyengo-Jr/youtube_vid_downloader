@@ -1,14 +1,11 @@
 import streamlit as st
 from pytube import YouTube
-import pytube.request
-
-# Set a custom User-Agent header
-pytube.request.default_headers['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+import re
 
 def download_video(url, quality='highest'):
     try:
         # Validate URL
-        if not "youtube.com" in url and not "youtu.be" in url:
+        if not re.match(r'^(https?\:\/\/)?(www\.youtube\.com|youtu\.?be)\/.+$', url):
             raise ValueError("Invalid YouTube URL")
         
         yt = YouTube(url)
@@ -25,8 +22,9 @@ def download_video(url, quality='highest'):
         stream.download()
         return yt.title
 
+    except ValueError as ve:
+        return f"Error: {str(ve)}"
     except Exception as e:
-        # Return detailed error message
         return f"Error: {str(e)}"
 
 # Streamlit UI
