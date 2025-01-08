@@ -3,24 +3,9 @@ from pytube import YouTube
 import re
 import os
 
-def bypass_age_gate(url):
-    """Bypass age gate by adding headers"""
-    from pytube.innertube import InnerTube
-    innertube = InnerTube(client='ANDROID')
-    headers = {
-        'User-Agent': 'Mozilla/5.0',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'en-us,en;q=0.5',
-        'Accept-Encoding': 'gzip,deflate',
-        'Accept-Charset': 'ISO-8859-1,utf-8;q=0.7,*;q=0.7',
-        'Keep-Alive': 'timeout=15, max=100',
-        'Connection': 'keep-alive',
-    }
-    return YouTube(url, use_oauth=True, allow_oauth_cache=True, headers=headers)
-
 def get_video_info(url):
     try:
-        yt = bypass_age_gate(url)
+        yt = YouTube(url)
         streams = yt.streams.filter(progressive=True).order_by('resolution').desc()
         available_qualities = [stream.resolution for stream in streams]
         return yt, available_qualities
@@ -33,17 +18,12 @@ def download_video(url, selected_quality, output_path=None):
         if not re.match(r'^(https?\:\/\/)?(www\.youtube\.com|youtu\.?be)\/.+$', url):
             raise ValueError("Invalid YouTube URL")
         
-        yt = bypass_age_gate(url)
-        
-        # Add progress callback
-        def on_progress(stream, chunk, bytes_remaining):
-            total_size = stream.filesize
-            bytes_downloaded = total_size - bytes_remaining
-            percentage = (bytes_downloaded / total_size) * 100
-            progress_bar.progress(int(percentage))
-            status_text.text(f"Downloading... {int(percentage)}%")
-        
-        yt.register_on_progress_callback(on_progress)
+        yt = YouTube(
+            url,
+            on_progress_callback=on_progress,
+            use_oauth=True,
+            allow_oauth_cache=True
+        )
         
         # Get appropriate stream
         if selected_quality == 'highest':
@@ -67,6 +47,13 @@ def download_video(url, selected_quality, output_path=None):
 
     except Exception as e:
         return False, str(e)
+
+def on_progress(stream, chunk, bytes_remaining):
+    total_size = stream.filesize
+    bytes_downloaded = total_size - bytes_remaining
+    percentage = (bytes_downloaded / total_size) * 100
+    progress_bar.progress(int(percentage))
+    status_text.text(f"Downloading... {int(percentage)}%")
 
 # Streamlit UI
 st.title('YouTube Video Downloader')
