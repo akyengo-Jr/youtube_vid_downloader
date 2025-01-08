@@ -1,11 +1,14 @@
 import streamlit as st
-from pytube import YouTube
+from pytube import YouTube, request
 
 def download_video(url, quality='highest'):
     try:
         # Validate URL
         if not "youtube.com" in url and not "youtu.be" in url:
             raise ValueError("Invalid YouTube URL")
+        
+        # Set custom request headers
+        request.default_headers['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         
         yt = YouTube(url)
         
