@@ -1,8 +1,18 @@
 import streamlit as st
 from pytube import YouTube
 import re
+import os
 
-def download_video(url, quality='highest'):
+def get_video_info(url):
+    try:
+        yt = YouTube(url)
+        streams = yt.streams.filter(progressive=True)
+        available_qualities = [stream.resolution for stream in streams]
+        return yt, available_qualities
+    except Exception as e:
+        return None, None
+
+def download_video(url, selected_quality, output_path=None):
     try:
         # Validate URL
         if not re.match(r'^(https?\:\/\/)?(www\.youtube\.com|youtu\.?be)\/.+$', url):
@@ -10,36 +20,70 @@ def download_video(url, quality='highest'):
         
         yt = YouTube(url)
         
-        # Select stream based on quality
-        if quality == 'highest':
+        # Add progress callback
+        def on_progress(stream, chunk, bytes_remaining):
+            total_size = stream.filesize
+            bytes_downloaded = total_size - bytes_remaining
+            percentage = (bytes_downloaded / total_size) * 100
+            progress_bar.progress(int(percentage))
+            status_text.text(f"Downloading... {int(percentage)}%")
+        
+        yt.register_on_progress_callback(on_progress)
+        
+        # Get appropriate stream
+        if selected_quality == 'highest':
             stream = yt.streams.get_highest_resolution()
-        elif quality == 'lowest':
-            stream = yt.streams.get_lowest_resolution()
         else:
-            stream = yt.streams.filter(res=quality).first()
+            stream = yt.streams.filter(resolution=selected_quality, progressive=True).first()
+            if not stream:
+                stream = yt.streams.get_highest_resolution()
+        
+        # Create output directory if it doesn't exist
+        if output_path:
+            os.makedirs(output_path, exist_ok=True)
         
         # Download video
-        stream.download()
-        return yt.title
+        filename = stream.default_filename
+        stream.download(output_path=output_path)
+        return True, filename
 
-    except ValueError as ve:
-        return f"Error: {str(ve)}"
     except Exception as e:
-        return f"Error: {str(e)}"
+        return False, str(e)
 
 # Streamlit UI
 st.title('YouTube Video Downloader')
 
-url = st.text_input('Enter YouTube video URL')
-qualities = ['highest', 'lowest', '360p', '720p', '1080p']
-quality = st.selectbox('Select video quality', qualities)
+# Create download directory in current working directory
+download_dir = os.path.join(os.getcwd(), "downloads")
 
-if st.button('Download'):
-    if url:
-        title = download_video(url, quality)
-        if "Error" in title:
-            st.error(title)
-        else:
-            st.success(f'Video "{title}" has been downloaded successfully!')
+# URL input
+url = st.text_input('Enter YouTube video URL')
+
+if url:
+    # Get video information
+    yt, available_qualities = get_video_info(url)
+    
+    if yt and available_qualities:
+        st.image(yt.thumbnail_url, use_column_width=True)
+        st.write(f"Title: {yt.title}")
+        st.write(f"Length: {yt.length // 60}:{yt.length % 60:02d} minutes")
+        st.write(f"Views: {yt.views:,}")
+        
+        # Quality selection
+        qualities = ['highest'] + available_qualities
+        selected_quality = st.selectbox('Select video quality', qualities)
+        
+        if st.button('Download Video'):
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            
+            success, result = download_video(url, selected_quality, download_dir)
+            
+            if success:
+                progress_bar.progress(100)
+                status_text.text("Download completed!")
+                st.success(f'Video "{result}" has been downloaded to the "downloads" folder!')
+            else:
+                st.error(f'Error: {result}')
     else:
-        st.error('Please enter a valid YouTube URL')
+        st.error("Unable to fetch video information. Please check the URL and try again.")
