@@ -2,3 +2,4 @@ streamlit
 pytube
 yt_dlp
 youtube_dl
+BeautifulSoap
